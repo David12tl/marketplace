@@ -1,0 +1,468 @@
+---
+import products from '../../../public/data/products.json';
+
+export async function getStaticPaths() {
+  return products.map((p) => ({
+    params: { slug: p.slug },
+    props: { product: p },
+  }));
+}
+
+const { product } = Astro.props;
+
+// Helpers
+const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const money = (n: number): string => mxn.format(Number(n || 0));
+const stars = (r: number = 0): string => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
+const hero: string = (product.gallery?.[0] || product.image) as string;
+
+// Recomendados: por recommendedIds o por categoría/brand
+const recos = (product.recommendedIds?.length
+  ? (product.recommendedIds as number[])
+      .map((id) => products.find((p) => p.id === id))
+      .filter(Boolean)
+  : products.filter((p) => p.slug !== product.slug && (p.category === product.category || p.brand === product.brand))
+).slice(0, 12);
+
+// cuotas
+const months = 24;
+const monthly = (Number(product.price) / months) || 0;
+---
+
+<head>
+  <meta charset="utf-8" />
+  <title>{product.title} | BeelGo</title>
+  <meta name="description" content={product.description} />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --card:#ffffff; --border:#e5e7eb;
+    --text:#0f172a; --muted:#475569; --accent:#16a34a; --accent-2:#0ea5a3;
+    --warning:#f59e0b; --good:#16a34a; --bad:#ef4444; --ring:#22c55e;
+  }
+  *{ box-sizing:border-box }
+  html,body{ margin:0; padding:0 }
+  body{ background:var(--bg); color:var(--text); font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility }
+
+  .container{ max-width:1200px; margin:0 auto; padding:28px }
+  .breadcrumbs{ color:var(--muted); font-size:14px; margin-bottom:16px }
+  .breadcrumbs a{ color:var(--accent-2); text-decoration:none }
+  .breadcrumbs strong{ color:var(--text) }
+
+  .grid{ display:grid; gap:24px; grid-template-columns:1.15fr 1fr }
+  @media (max-width: 980px){ .grid{ grid-template-columns:1fr } }
+
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 6px 24px rgba(15,23,42,0.06) }
+
+  /* Galería */
+  .hero{ background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center }
+  .hero img{ width:100%; height:100%; object-fit:cover }
+  .thumbs{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-top:12px }
+  .thumbs button{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:0; aspect-ratio:1/1; cursor:pointer; transition:box-shadow .15s, transform .05s }
+  .thumbs button:hover{ box-shadow:0 4px 12px rgba(15,23,42,.06); transform:translateY(-1px) }
+
+  /* Info */
+  .title{ font-size:clamp(22px,3.2vw,34px); font-weight:800; line-height:1.15; margin:0 }
+  .meta{ color:var(--muted); margin-top:6px; font-size:15px }
+  .rating{ color:#8b5cf6; font-weight:700 }
+  .pill{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--border); background:#f5f7fb; color:var(--muted); padding:8px 12px; border-radius:999px; font-size:13px; margin-right:8px }
+
+  .price{ font-size:28px; font-weight:800; color:var(--good); margin:12px 0 4px }
+  .installments{ color:var(--muted); font-size:14px }
+
+  .btn{ height:48px; padding:0 18px; border-radius:12px; border:1px solid var(--ring); background:linear-gradient(180deg,var(--accent),#178a47); color:#fff; font-weight:700; cursor:pointer }
+  .btn:hover{ filter:brightness(1.05) }
+  .btn.secondary{ background:#0f172a; border-color:#0f172a }
+
+  h3{ font-size:16px; color:#0f172a; margin:14px 0 8px; font-weight:700 }
+  .section{ margin-top:16px }
+  .chip{ width:28px; height:28px; border-radius:999px; border:2px solid #e2e8f0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04) }
+  ul.clean{ margin:0; padding-left:18px; color:#111827 }
+  .divider{ height:1px; background:var(--border); margin:16px 0; border:0 }
+
+  /* ======= Cards “shopping” (recomendados) ======= */
+  .reco-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px }
+  @media (max-width: 980px){ .reco-grid{ grid-template-columns:repeat(2,minmax(0,1fr)) } }
+  .gcard{ background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; text-decoration:none; color:inherit; transition:box-shadow .15s, transform .08s }
+  .gcard:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(15,23,42,.08) }
+  .gimg{ width:100%; aspect-ratio:1/1; object-fit:cover; display:block }
+  .gbody{ padding:12px }
+  .gtitle{ font-size:14px; margin:0 0 8px; color:#111827 }
+  .gprice{ font-size:20px; font-weight:800; color:#111827; margin:0 }
+  .ginstall{ font-size:13px; color:var(--muted); margin-top:2px }
+  .gfree{ font-size:13px; color:var(--good); margin-top:6px; font-weight:700; }
+
+  /* ======= Opiniones (panel tipo Google) ======= */
+  .opiniones{ display:grid; grid-template-columns:280px 1fr; gap:20px }
+  @media (max-width: 900px){ .opiniones{ grid-template-columns:1fr } }
+  .scorebox{ background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px }
+  .score{ font-size:42px; font-weight:800; color:#111827; line-height:1 }
+  .scoreStars{ color:#111827; font-size:18px; letter-spacing:2px }
+  .scoreCount{ color:var(--muted); font-size:13px }
+  .bars{ margin-top:8px; display:grid; gap:6px }
+  .barrow{ display:grid; grid-template-columns:18px 1fr; align-items:center; gap:8px; font-size:12px; color:#111827 }
+  .bar{ height:6px; background:#e5e7eb; border-radius:999px; overflow:hidden }
+  .bar > i{ display:block; height:100%; background:#16a34a } /* verde llena */
+
+  .revlist{ background:#fff; border:1px solid var(--border); border-radius:12px; }
+  .revitem{ padding:14px 16px; border-top:1px solid var(--border) }
+  .revitem:first-child{ border-top:0 }
+  .revname{ font-weight:700 }
+  .revstars{ color:#f59e0b; font-weight:800 }
+  .revdate{ color:var(--muted); font-size:12px }
+
+  /* Form reseña */
+  .form{ display:grid; gap:12px; margin-top:12px }
+  .field{ display:grid; gap:6px }
+  .input,.textarea{ width:100%; border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:#fff; color:#0f172a; font:inherit }
+  .textarea{ min-height:96px; resize:vertical }
+  .inline{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+  .starbtn{ font-size:20px; line-height:1; background:transparent; border:0; cursor:pointer; color:#e2e8f0 }
+  .starbtn.active{ color:#f59e0b }
+
+  /* Q&A */
+  .qa{ background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px }
+  .qaitem{ border-top:1px solid var(--border); padding:12px 0 }
+  .qaitem:first-child{ border-top:0 }
+  .q{ font-weight:700 }
+  .a{ margin-top:6px; color:#111827 }
+  .qaform{ display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:10px }
+  .btn-blue{ background:#1d4ed8; border:1px solid #1d4ed8; color:#fff; height:44px; padding:0 16px; border-radius:10px; font-weight:700; cursor:pointer }
+</style>
+
+<div class="container">
+  <!-- MIGAS -->
+  <nav class="breadcrumbs">
+    <a href="/">Inicio</a> ›
+    <a href={`/categoria/${encodeURIComponent(product.category?.toLowerCase() || 'otros')}/`}>{product.category}</a> ›
+    <strong>{product.title}</strong>
+  </nav>
+
+  <!-- HERO + INFO -->
+  <div class="grid">
+    <section class="card">
+      <div class="hero">
+        <img id="heroImg" src={hero} alt={product.title} loading="eager" />
+      </div>
+      {product.gallery?.length > 1 && (
+        <div class="thumbs">
+          {product.gallery.map((g, i) => (
+            <button aria-label={`Ver imagen ${i+1}`} onClick={`document.getElementById('heroImg').src='${g}'`}>
+              <img class="gimg" src={g} alt={`${product.title} ${i+1}`} loading="lazy" />
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+
+    <section class="card">
+      <h1 class="title">{product.title}</h1>
+      <div class="meta">{product.meta}</div>
+
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="rating">{stars(product.rating)} <small class="meta">({product.ratingCount || 0})</small></span>
+        <span class="pill">{product.availability}</span>
+        {product.estado && <span class="pill">Hecho en: {product.estado}</span>}
+      </div>
+
+      <div class="price">{money(product.price)}</div>
+      <div class="installments">{months} meses de {money(monthly)}</div>
+
+      {product.freeShipping || product.envioGratis ? (
+        <div style="margin-top:8px;color:var(--good);font-weight:700">Envío gratis</div>
+      ) : null}
+
+      {product.sizeOptions?.length ? (
+        <div class="section">
+          <h3>Tallas</h3>
+          <div class="inline">
+            {product.sizeOptions.map((s) => <button class="btn secondary" style="height:40px">{s}</button>)}
+          </div>
+        </div>
+      ) : null}
+
+      {product.colors?.length ? (
+        <div class="section">
+          <h3>Colores</h3>
+          <div class="inline">
+            {product.colors.map((c) => <span class="chip" style={`background:${c}`}></span>)}
+          </div>
+        </div>
+      ) : null}
+
+      <div class="section">
+        <h3>Descripción</h3>
+        <p style="margin:0;color:#111827">{product.description}</p>
+      </div>
+
+      {(product.highlights?.length || product.specs?.length) && (
+        <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <h3>Características destacadas</h3>
+            <ul class="clean">{(product.highlights || []).map((h) => <li>{h}</li>)}</ul>
+          </div>
+          <div>
+            <h3>Especificaciones</h3>
+            <ul class="clean">{(product.specs || []).map((s) => <li>{s}</li>)}</ul>
+          </div>
+        </div>
+      )}
+
+      <div style="display:flex;gap:12px;margin-top:18px;flex-wrap:wrap">
+        <button id="btn-add" class="btn">Añadir al carrito</button>
+        <a class="btn secondary" href={`/pagos#form-${product.id}`}>Comprar ahora</a>
+      </div>
+
+
+      <hr class="divider" />
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="pill">Marca: <strong style="margin-left:6px;color:#0f172a">{product.brand}</strong></span>
+        {product.returnPolicy && <span class="pill">Devoluciones: {product.returnPolicy}</span>}
+        {product.shipsFrom && <span class="pill">Envío: {product.shipsFrom}</span>}
+        {product.soldBy && <span class="pill">Vende: {product.soldBy}</span>}
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Recomendados (cards estilo Shopping) ===== -->
+  {recos.length > 0 && (
+    <section class="section">
+      <h3 style="font-size:18px;margin-bottom:10px">Productos recomendados</h3>
+      <div class="reco-grid">
+        {recos.map((r) => {
+          const m = 24, mensual = Number(r?.price || 0) / m;
+          return (
+            <a class="gcard" href={`/producto/${r.slug}/`} aria-label={`Ver ${r.title}`}>
+              <img class="gimg" src={r.image} alt={r.title} loading="lazy" />
+              <div class="gbody">
+                <p class="gtitle">{r.title}</p>
+                <p class="gprice">{money(Number(r.price))}</p>
+                <div class="ginstall">{m} meses de {mxn.format(mensual)}</div>
+                {(r.freeShipping || r.envioGratis) && <div class="gfree">Envío gratis</div>}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  )}
+
+  <!-- ===== Opiniones del producto (promedio + histograma + lista + formulario) ===== -->
+  <section class="section">
+    <h3 style="font-size:18px;margin-bottom:10px">Opiniones del producto</h3>
+    <div class="opiniones">
+      <!-- Panel izquierdo -->
+      <div class="scorebox">
+        <div class="score" id="avgScore">—</div>
+        <div class="scoreStars" id="avgStars">☆☆☆☆☆</div>
+        <div class="scoreCount" id="countReviews">0 calificaciones</div>
+        <div class="bars" id="bars">
+          <!-- filas 5..1 estrellas -->
+        </div>
+      </div>
+
+      <!-- Reseñas destacadas + formulario -->
+      <div class="revlist" id="reviewsList">
+        <div class="revitem"><span class="meta">No hay reseñas todavía.</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Escribe tu comentario</h3>
+      <form id="reviewForm" class="form" autocomplete="on">
+        <div class="field">
+          <label for="name">Tu nombre</label>
+          <input id="name" name="name" class="input" placeholder="Ej. Ana Pérez" required />
+        </div>
+        <div class="field">
+          <label>Tu calificación</label>
+          <div class="inline" id="starsPicker" aria-label="Selecciona de 1 a 5 estrellas">
+            <button type="button" class="starbtn" data-v="1">★</button>
+            <button type="button" class="starbtn" data-v="2">★</button>
+            <button type="button" class="starbtn" data-v="3">★</button>
+            <button type="button" class="starbtn" data-v="4">★</button>
+            <button type="button" class="starbtn" data-v="5">★</button>
+            <input type="hidden" id="rating" name="rating" value="5" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="comment">Comentario</label>
+          <textarea id="comment" name="comment" class="textarea" placeholder="Cuéntanos tu experiencia..." required></textarea>
+        </div>
+        <div class="inline">
+          <button class="btn" type="submit">Enviar reseña</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== Preguntas y respuestas ===== -->
+  <section class="section qa">
+    <h3 style="font-size:18px;margin:0 0 6px">Preguntas y respuestas</h3>
+    <div class="qaform">
+      <input id="qText" class="input" placeholder="Escribe tu pregunta..." />
+      <button id="qAsk" class="btn-blue">Preguntar</button>
+    </div>
+    <div id="qaList" style="margin-top:8px">
+      <div class="qaitem"><span class="meta">No hay preguntas aún.</span></div>
+    </div>
+  </section>
+</div>
+
+<!-- ===== Lógica cliente: carrito/checkout + reseñas + Q&A ===== -->
+<script is:inline>
+  // Carrito/Checkout (usa tu lib y endpoint existentes)
+  import('/src/lib/cart.js').then(({ Cart }) => {
+    const btnAdd = document.getElementById('btn-add');
+    const btnBuy = document.getElementById('btn-buy');
+    const product = {
+      id:         {product.id},
+      slug:       "{product.slug}",
+      name:       "{product.title}",
+      price:      {Number(product.price)},
+      image:      "{(product.gallery?.[0] || product.image) ?? ''}",
+      currency:   "mxn"
+    };
+    btnAdd?.addEventListener('click', () => { Cart.add(product); window.location.href = '/carrito/'; });
+    btnBuy?.addEventListener('click', async () => {
+      try{
+        const res = await fetch('/api/create-checkout', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            items:[{ name:product.name, price:product.price, quantity:1, image:product.image, currency:product.currency }],
+            success_url: `${window.location.origin}/gracias/`,
+            cancel_url: window.location.href
+          })
+        });
+        const data = await res.json();
+        if (data?.url) window.location.href = data.url; else alert('No se pudo abrir la pasarela.');
+      }catch(e){ alert('Error iniciando el pago'); console.error(e); }
+    });
+  });
+
+  // ===== Reseñas con histograma (localStorage demo) =====
+  (function(){
+    const KEY = `reviews_{product.slug}`;
+    const $avg = document.getElementById('avgScore');
+    const $stars = document.getElementById('avgStars');
+    const $count = document.getElementById('countReviews');
+    const $list = document.getElementById('reviewsList');
+    const $bars = document.getElementById('bars');
+    const $form = document.getElementById('reviewForm');
+    const $picker = document.getElementById('starsPicker');
+
+    const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
+    const write = (arr) => localStorage.setItem(KEY, JSON.stringify(arr));
+    const fmtStars = (n) => '★'.repeat(n) + '☆'.repeat(5-n);
+
+    function renderBars(dist, total){
+      $bars.innerHTML = '';
+      for(let s=5; s>=1; s--){
+        const pct = total ? Math.round((dist[s]||0) * 100 / total) : 0;
+        const row = document.createElement('div');
+        row.className = 'barrow';
+        row.innerHTML = `<span>${s}</span><div class="bar"><i style="width:${pct}%"></i></div>`;
+        $bars.appendChild(row);
+      }
+    }
+
+    function render(){
+      const items = read();
+      const total = items.length;
+
+      if (!total) {
+        $avg.textContent = '—';
+        $stars.textContent = '☆☆☆☆☆';
+        $count.textContent = '0 calificaciones';
+        $list.innerHTML = '<div class="revitem"><span class="meta">No hay reseñas todavía.</span></div>';
+        renderBars({}, 0);
+        return;
+      }
+
+      const avg = items.reduce((a,b)=>a+b.rating,0)/total;
+      $avg.textContent = avg.toFixed(1);
+      $stars.textContent = fmtStars(Math.round(avg));
+      $count.textContent = `${total} calificaciones`;
+
+      // histograma
+      const dist = {1:0,2:0,3:0,4:0,5:0};
+      items.forEach(it => dist[it.rating] = (dist[it.rating]||0)+1);
+      renderBars(dist, total);
+
+      // lista (top 3 “destacadas” por calificación, recientes primero)
+      const sorted = items.slice().sort((a,b)=> b.rating - a.rating || new Date(b.date) - new Date(a.date)).slice(0,3);
+      $list.innerHTML = sorted.map(it => `
+        <div class="revitem">
+          <div class="revname">${it.name} <span class="revstars">${fmtStars(it.rating)}</span></div>
+          <div class="revdate">${new Date(it.date).toLocaleDateString()}</div>
+          <div style="margin-top:6px">${it.comment.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        </div>
+      `).join('');
+    }
+
+    // picker estrellas
+    function setPicker(n){
+      [...$picker.querySelectorAll('.starbtn')].forEach(b => b.classList.toggle('active', Number(b.dataset.v) <= n));
+      (document.getElementById('rating') as HTMLInputElement).value = String(n);
+    }
+    $picker.addEventListener('click', e => {
+      const t = e.target as HTMLElement;
+      if (t && t.matches('.starbtn')) setPicker(Number(t.getAttribute('data-v')));
+    });
+    setPicker(5);
+
+    $form.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const name = (document.getElementById('name') as HTMLInputElement).value.trim();
+      const comment = (document.getElementById('comment') as HTMLTextAreaElement).value.trim();
+      const rating = Number((document.getElementById('rating') as HTMLInputElement).value) || 5;
+      if (!name || !comment) return;
+      const items = read();
+      items.unshift({ name, comment, rating, date: new Date().toISOString() });
+      write(items);
+      (e.target as HTMLFormElement).reset();
+      setPicker(5);
+      render();
+    });
+
+    render();
+  })();
+
+  // ===== Q&A (localStorage demo) =====
+  (function(){
+    const KEY = `qa_{product.slug}`;
+    const $list = document.getElementById('qaList');
+    const $txt = document.getElementById('qText') as HTMLInputElement;
+    const $btn = document.getElementById('qAsk');
+
+    const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
+    const write = (arr) => localStorage.setItem(KEY, JSON.stringify(arr));
+
+    function render(){
+      const rows = read();
+      if (!rows.length) { $list.innerHTML = '<div class="qaitem"><span class="meta">No hay preguntas aún.</span></div>'; return; }
+      $list.innerHTML = rows.map(r => `
+        <div class="qaitem">
+          <div class="q">— ${r.q}</div>
+          ${r.a ? `<div class="a">${r.a}</div>` : `<div class="meta" style="margin-top:6px">El vendedor aún no responde.</div>`}
+        </div>
+      `).join('');
+    }
+
+    $btn.addEventListener('click', ()=>{
+      const q = ($txt.value || '').trim();
+      if (!q) return;
+      const rows = read();
+      rows.unshift({ q, a: null, date: new Date().toISOString() });
+      write(rows);
+      $txt.value = '';
+      render();
+    });
+
+    render();
+  })();
+</script>

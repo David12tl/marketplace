@@ -1,0 +1,48 @@
+---
+const { product } = Astro.props;
+const srcPath = product.image?.startsWith("/") ? product.image : `/images/${product.image}`;
+
+// 👇 Función para mostrar precios en MXN
+function money(n) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+  }).format(n);
+}
+---
+
+<article class="card" data-product-card data-category={product.category} data-estado={product.estado}>
+  <a href={`/producto/${product.slug}`} style="text-decoration:none;color:inherit">
+    <div class="imgbox">
+      <img src={srcPath} alt={product.title} loading="lazy" draggable="false" />
+    </div>
+    <div class="meta">{product.meta}</div>
+    <h3>{product.title}</h3>
+    <p class="desc">{product.description}</p>
+
+    {product.colors?.length ? (
+      <div class="colors">
+        {product.colors.map((c) => (
+          <span class="dot" style={`background:${c}`}></span>
+        ))}
+      </div>
+    ) : null}
+
+    <!-- 👇 precio en MXN -->
+    <div class="price">{money(product.price)}</div>
+
+    <!-- 👇 Estado en verde -->
+    {product.estado ? (
+      <div class="estado">{product.estado}</div>
+    ) : null}
+  </a>
+</article>
+
+<style>
+  .estado {
+    margin-top: 6px;
+    font-weight: 600;
+    color: #16a34a; /* verde tailwind (green-600) */
+  }
+</style>

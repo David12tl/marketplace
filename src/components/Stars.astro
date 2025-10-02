@@ -1,0 +1,6 @@
+---
+const { value = 0 } = Astro.props; // 0..5
+const full = '★'.repeat(Math.round(value));
+const empty = '☆'.repeat(5 - Math.round(value));
+---
+<span class="stars" aria-label={`Calificación ${value} de 5`}>{full}{empty}</span>

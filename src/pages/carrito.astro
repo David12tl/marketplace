@@ -1,0 +1,91 @@
+---
+const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+---
+
+<style>
+  body { background:#0b0b0b; color:#f8fafc }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px }
+  .card{background:#0c0d0d;border:1px solid #1a1a1a;border-radius:16px;padding:20px}
+  .btn{height:44px;padding:0 16px;border-radius:10px;border:1px solid #22c55e;background:linear-gradient(180deg,#16a34a,#178a47);color:#02140a;font-weight:800;cursor:pointer}
+  .btn.secondary{background:transparent;color:#f8fafc;border-color:#26323a}
+  .row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+  .muted{color:#9ca3af}
+</style>
+
+<div class="container">
+  <h1>Tu carrito</h1>
+  <div id="cart" class="card">
+    <p class="muted">Cargando carrito…</p>
+  </div>
+</div>
+
+<script is:inline>
+  import('/src/lib/cart.js').then(({ Cart }) => {
+    const $ = (h) => { const d=document.createElement('div'); d.innerHTML=h; return d.firstElementChild; };
+    const cont = document.getElementById('cart');
+
+    const render = () => {
+      const items = Cart.get();
+      if (!items.length) {
+        cont.innerHTML = '<p class="muted">Tu carrito está vacío.</p>';
+        return;
+      }
+      const total = Cart.total();
+      cont.innerHTML = '';
+
+      items.forEach(it => {
+        cont.appendChild($(`
+          <div class="row" style="padding:10px 0;border-bottom:1px solid #1c1f22">
+            <div style="display:flex;gap:12px;align-items:center">
+              <img src="${it.image || ''}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #1f2937" />
+              <div>
+                <div style="font-weight:700">${it.name}</div>
+                <div class="muted">Cant: ${it.quantity || 1}</div>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="color:#16a34a;font-weight:800">${new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(it.price)}</div>
+              <button data-id="${it.id}" class="btn secondary" style="height:36px;margin-top:6px">Quitar</button>
+            </div>
+          </div>
+        `));
+      });
+
+      const footer = $(`
+        <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;margin-top:12px">
+          <div>Total: <strong style="color:#16a34a">${new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(total)}</strong></div>
+          <div>
+            <button id="btn-clear" class="btn secondary">Vaciar</button>
+            <button id="btn-checkout" class="btn">Pagar ahora</button>
+          </div>
+        </div>
+      `);
+      cont.appendChild(footer);
+
+      cont.querySelectorAll('button[data-id]').forEach(b=>{
+        b.addEventListener('click',()=>{ Cart.remove(b.dataset.id); render(); });
+      });
+      document.getElementById('btn-clear')?.addEventListener('click',()=>{ Cart.clear(); render(); });
+
+      document.getElementById('btn-checkout')?.addEventListener('click', async ()=>{
+        const items = Cart.get().map(it => ({
+          name: it.name, price: it.price, quantity: it.quantity || 1, image: it.image, currency: 'mxn'
+        }));
+        const res = await fetch('/api/create-checkout', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            items,
+            success_url: `${window.location.origin}/gracias/`,
+            cancel_url: `${window.location.origin}/carrito/`
+          })
+        });
+        const data = await res.json();
+        if (data?.url) window.location.href = data.url;
+        else alert('No se pudo iniciar el pago');
+      });
+    };
+
+    render();
+  });
+</script>

@@ -1,0 +1,104 @@
+---
+import Container from "./Container.astro";
+import { Astronav, MenuItems, MenuIcon } from "astro-navbar";
+import User from "./User.astro";
+
+const menuitems = [
+  { href: "/", label: "Inicio" },
+  {href: "/map" , label: "Mapa"}, 
+  {href: "/calendar", label: "Calendario"},
+  
+  {href: "/marketplace" , label: 'MarketPlace'},
+  {
+    href: "https://485z3n3rwf9.typeform.com/to/tAwG4XPz",
+    label: "Anunciar agencia",
+  },
+  { href: "/pricing", label: "Paquetes" },
+  { href: "/articles", label: "Nuestras agencias" },
+];
+
+const { user, displayName, avatar } = Astro.props;
+
+const menuLogin = [{ href: "/signin", label: "Iniciar sesión" }];
+---
+
+<div class="mt-0">
+  <nav
+    style={{ margin: 0, padding: 0 }}
+    class="w-full top-0 left-0 z-50 sticky bg-white m-0 p-0"
+  >
+    <Container>
+      <header
+        class="flex flex-col lg:flex-row justify-between items-center mt-0"
+      >
+        <Astronav>
+          <div class="flex w-full lg:w-auto items-center justify-between">
+            <a href="/" class="flex items-center space-x-3 rtl:space-x-reverse">
+              <img
+                src="/Beeltravel-logo.webp"
+                class="h-32 overflow-hidden"
+                alt="Logo"
+              />
+            </a>
+            <div class="block lg:hidden">
+              <MenuIcon class="w-8 h-8 text-black" />
+            </div>
+          </div>
+          <MenuItems class="hidden w-full lg:w-auto mt-2 lg:flex lg:mt-0">
+            <ul
+              class="font-medium flex flex-col p-4 lg:p-0 mt-4 border rounded-lg lg:flex-row lg:space-x-8 lg:mt-0 lg:border-0"
+            >
+              {
+                menuitems.map((item, index) => (
+                  <li>
+                    <a
+                      href={item.href}
+                      class="block hover:underline decoration-[#99DC49] py-2 px-3 text-black rounded lg:bg-transparent lg:p-0"
+                    >
+                      {item.label}
+                    </a>
+                  </li>
+                ))
+              }
+            </ul>
+          </MenuItems>
+
+          <div class="relative lg:ml-4">
+            <div class="flex items-center">
+              <input
+                type="text"
+                placeholder="Buscar"
+                class="block w-full lg:w-44 py-2 px-4 rounded-l-lg border border-gray-300 focus:ring-2 focus:ring-[#8dc942] focus:outline-none"
+              />
+
+             <div
+  class="bg-gray-300 ml-12 p-2 rounded-r-lg flex justify-end items-center"
+>
+  {
+    menuLogin.map((item, index) => (
+      <a
+        href={item.href}
+        class="block hover:underline decoration-[#99DC49] py-1 px-1 text-black rounded lg:bg-transparent lg:p-0"
+      >
+        {avatar ? (
+          <img 
+            src={avatar} 
+            alt={displayName ?? "Usuario"} 
+            class="w-8 h-8 rounded-full object-cover border border-gray-300" 
+          />
+        ) : (
+          <User />
+        )}
+        <span class="sr-only">{item.label}</span>
+      </a>
+    ))
+  }
+</div>
+
+            </div>
+          </div>
+        </Astronav>
+      </header>
+    </Container>
+  </nav>
+</div>

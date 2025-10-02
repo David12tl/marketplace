@@ -1,0 +1,259 @@
+---
+const { categories = [], active = 'Todos' } = Astro.props;
+const cats = Array.isArray(categories) ? categories : [];
+---
+
+<style>
+  .catbar.container { display:flex; flex-wrap:wrap; gap:12px; align-items:center }
+  .catbar button { height:40px; padding:0 12px; border:1px solid var(--soft); border-radius:8px; background:#fff; cursor:pointer }
+  .catbar button.active { background: var(--brand, #111827); color:#fff; border-color:var(--brand, #111827); }
+  .hide { display:none !important; }
+
+  /* Selector de estado (popover) */
+  .state-pop { position:relative; }
+  .state-panel {
+    position:absolute; top:48px; right:0; z-index:50;
+    width: min(320px, 90vw); max-height: 300px; overflow:auto;
+    background:#fff; border:1px solid var(--soft); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.12); padding:8px;
+    display:none;
+  }
+  .state-panel.open { display:block; }
+  .state-panel input {
+    width:100%; height:36px; border:1px solid var(--soft); border-radius:8px; padding:0 10px; margin-bottom:8px; outline:0;
+  }
+  .state-item {
+    width:100%; text-align:left; padding:8px 10px; border-radius:8px; border:1px solid transparent; background:#fff; cursor:pointer;
+  }
+  .state-item:hover { background:#f5f5f5; }
+  .state-item.active { background: var(--brand, #111827); color:#fff; }
+
+  /* === Overlay fix: panel de estados por encima de todo === */
+.catbar.container{
+  position: relative;     /* crea stacking context de la barra */
+  z-index: 1000;
+  overflow: visible;      /* evita que se recorte el popover */
+}
+
+.state-pop{
+  position: relative;
+  z-index: 2000;          /* por encima de la barra */
+}
+
+.state-panel{
+  z-index: 99999;         /* por encima de cualquier card */
+  /* opcional: mejora la elevación visual */
+  box-shadow: 0 12px 32px rgba(0,0,0,.18);
+}
+
+/* Asegura que las cards no “pisen” el popover */
+[data-product-card]{
+  position: relative;
+  z-index: 1;
+}
+
+</style>
+
+<div class="catbar container" style="gap:12px; align-items:center">
+  <!-- Búsqueda global (incluye búsqueda por nombre de estado) -->
+  <input
+    id="catSearch"
+    type="search"
+    placeholder="Buscar productos, categorías o estados…"
+    aria-label="Buscar productos"
+    style="flex:1; min-width:220px; height:40px; border:1px solid var(--soft); border-radius:8px; padding:0 12px; outline:0"
+  />
+
+  <!-- Categorías -->
+  <button class="active" data-cat="Todos">Todos</button>
+  {cats.map((c) => (
+    <button data-cat={String(c)}>{c}</button>
+  ))}
+
+  <!-- Botón selector de Estado -->
+  <div class="state-pop">
+    <button id="statePickerBtn" aria-haspopup="listbox" aria-expanded="false" data-state="Todos">
+      Estado: <strong id="statePickerLabel">Todos</strong>
+    </button>
+    <div id="statePanel" class="state-panel" role="listbox" aria-label="Seleccionar estado">
+      <!-- Buscador interno de estados (opcional) -->
+      <input id="stateFilter" type="search" placeholder="Buscar estado…" aria-label="Buscar estado" />
+      <div id="stateList" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  // --- Elementos base
+  const $search = document.getElementById('catSearch');
+  const $stateBtn = document.getElementById('statePickerBtn');
+  const $stateLbl = document.getElementById('statePickerLabel');
+  const $panel = document.getElementById('statePanel');
+  const $stateFilter = document.getElementById('stateFilter');
+  const $stateList = document.getElementById('stateList');
+
+  // --- Categoria activa
+  function getActiveCat() {
+    const act = document.querySelector('[data-cat].active');
+    return act ? act.getAttribute('data-cat') : 'Todos';
+  }
+
+  // --- Estado activo
+  function getActiveState() {
+    return $stateBtn?.getAttribute('data-state') || 'Todos';
+  }
+
+  function setActiveState(newState) {
+    $stateBtn.setAttribute('data-state', newState);
+    $stateLbl.textContent = newState;
+    $stateBtn.setAttribute('aria-expanded', 'false');
+    closePanel();
+    applyFilters();
+  }
+
+  // --- Aplicar filtros combinados (Categoría AND Estado AND Texto)
+  function applyFilters() {
+    const cat = getActiveCat();
+    const est = getActiveState();
+    const q = ($search?.value || '').toLowerCase().trim();
+
+    document.querySelectorAll('[data-product-card]').forEach((card) => {
+      const c = (card.getAttribute('data-category') || '').toLowerCase();
+      const e = (card.getAttribute('data-estado') || '').toLowerCase(); // <- requiere data-estado en cada card
+      const txt = (card.textContent || '').toLowerCase();
+
+      const matchCat = (cat === 'Todos' || c === cat.toLowerCase());
+      const matchEst = (est === 'Todos' || e === est.toLowerCase());
+      // ahora la búsqueda también hace match por nombre de estado
+      const matchText = (
+        q === '' ||
+        txt.includes(q) ||
+        c.includes(q) ||
+        e.includes(q)
+      );
+
+      card.classList.toggle('hide', !(matchCat && matchEst && matchText));
+    });
+
+    // También filtramos la lista de estados con la búsqueda global
+    filterStateList(q);
+
+    highlightActiveStateItem();
+  }
+
+  function activate(btn) {
+    document.querySelectorAll('[data-cat]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // Click en categorías
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cat]');
+    if (!btn) return;
+    activate(btn);
+    applyFilters();
+  });
+
+  // --- Búsqueda debounced (incluye estado)
+  let t;
+  $search?.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(applyFilters, 120);
+  });
+
+  // --- Panel de estados
+  function openPanel() {
+    $panel.classList.add('open');
+    $stateBtn.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => $stateFilter?.focus());
+  }
+  function closePanel() {
+    $panel.classList.remove('open');
+    $stateBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  // Toggle panel
+  $stateBtn?.addEventListener('click', () => {
+    if ($panel.classList.contains('open')) closePanel(); else openPanel();
+  });
+
+  // Cerrar si clic fuera
+  document.addEventListener('click', (e) => {
+    if ($panel.contains(e.target) || e.target === $stateBtn) return;
+    closePanel();
+  });
+
+  // --- Estados disponibles
+  function getStatesFromCards() {
+    const set = new Set();
+    document.querySelectorAll('[data-product-card][data-estado]').forEach((card) => {
+      const st = (card.getAttribute('data-estado') || '').trim();
+      if (st) set.add(st);
+    });
+    return Array.from(set);
+  }
+
+  async function getStatesFromJSON() {
+    try {
+      const res = await fetch('/data/products.json', { cache: 'no-store' }); // ajusta ruta si es necesario
+      if (!res.ok) return [];
+      const data = await res.json();
+      const set = new Set();
+      for (const p of (Array.isArray(data) ? data : [])) {
+        const val = (p.Estado ?? p.estado ?? '').toString().trim();
+        if (val) set.add(val);
+      }
+      return Array.from(set);
+    } catch (err) {
+      console.warn('No se pudo cargar /data/products.json', err);
+      return [];
+    }
+  }
+
+  function renderStateList(states) {
+    $stateList.innerHTML = '';
+    const active = getActiveState();
+    const all = ['Todos', ...states.sort((a,b)=> a.localeCompare(b, 'es'))];
+
+    for (const st of all) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'state-item' + (st === active ? ' active' : '');
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('data-value', st);
+      btn.textContent = st;
+      btn.addEventListener('click', () => setActiveState(st));
+      $stateList.appendChild(btn);
+    }
+  }
+
+  function highlightActiveStateItem() {
+    const active = getActiveState();
+    $stateList.querySelectorAll('.state-item').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-value') === active);
+    });
+  }
+
+  // --- Filtro de la lista de estados (por búsqueda global o por input interno)
+  function filterStateList(q) {
+    const query = (q || '').toLowerCase().trim();
+    $stateList?.querySelectorAll('.state-item').forEach(el => {
+      const val = (el.getAttribute('data-value') || '').toLowerCase();
+      if (val === 'todos') { el.style.display = ''; return; } // siempre visible
+      el.style.display = (query === '' || val.includes(query)) ? '' : 'none';
+    });
+  }
+
+  // Búsqueda interna del panel de estados (opcional)
+  $stateFilter?.addEventListener('input', () => {
+    filterStateList($stateFilter.value);
+  });
+
+  // Inicialización de estados
+  (async function initStates() {
+    let states = getStatesFromCards();
+    if (!states.length) states = await getStatesFromJSON();
+    renderStateList(states);
+  })();
+
+  // Asegúrate de que las tarjetas tengan data-estado y data-category
+</script>
