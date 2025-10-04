@@ -1,0 +1,129 @@
+---
+import products from '../../data/products.json';
+
+type P = {
+  id: number;
+  slug: string;
+  title: string;
+  price: number;
+  image?: string;
+  gallery?: string[];
+};
+
+// ✅ Generamos rutas estáticas por id
+export async function getStaticPaths() {
+  return products.map((p: P) => ({
+    params: { id: String(p.id) },
+    props: { product: p },
+  }));
+}
+
+// ✅ Tomamos el product de props o lo resolvemos por params.id (fallback seguro)
+const props = (Astro.props as { product?: P }) || {};
+const fromProps = props.product;
+const fromParams = products.find((p: P) => String(p.id) === String(Astro.params.id));
+const product: P | undefined = fromProps ?? fromParams;
+
+// ✅ Si no existe el producto, devolvemos un 404 limpio (sin reventar la página)
+if (!product) {
+  Astro.response.status = 404;
+  const msg = `Producto no encontrado (id: ${String(Astro.params.id || '—')})`;
+  throw new Error(msg);
+}
+
+// Helpers
+const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const money = (n: number) => mxn.format(Number(n || 0));
+
+// ✅ Imagen segura (evita “Cannot read properties of undefined (reading 'gallery')”)
+const img: string | undefined = product.gallery?.[0] ?? product.image ?? undefined;
+---
+
+<head>
+  <meta charset="utf-8" />
+  <title>Confirmar pago | {product.title}</title>
+  <meta name="robots" content="noindex" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#ffffff; --text:#0f172a; --muted:#475569; --border:#e5e7eb;
+      --green:#16a34a; --green-2:#15803d; --ink:#0b0b0b;
+    }
+    *{ box-sizing:border-box }
+    html,body{ margin:0; padding:0 }
+    body{ background:var(--bg); color:var(--text); font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial; }
+
+    .container{ max-width:900px; margin:0 auto; padding:28px }
+    a.back{ color:#0ea5a3; text-decoration:none }
+    .card{
+      background:#fff; border:1px solid var(--border); border-radius:16px;
+      padding:20px; box-shadow:0 8px 28px rgba(15,23,42,.08);
+    }
+    .grid{ display:grid; grid-template-columns:220px 1fr; gap:18px }
+    @media (max-width:780px){ .grid{ grid-template-columns:1fr } }
+
+    .img{ width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:12px; border:1px solid var(--border) }
+    .title{ margin:0 0 6px; font-weight:800; color:var(--ink); font-size:22px }
+    .price{ font-weight:800; color:var(--green); font-size:22px; margin:6px 0 14px }
+    .muted{ color:var(--muted); font-size:14px }
+
+    .box{ background:#f8fafc; border:1px dashed var(--border); border-radius:12px; padding:14px; margin-top:10px }
+    .confirm{ display:flex; gap:10px; align-items:flex-start }
+    .confirm .icon{ width:24px; height:24px; border-radius:999px; background:#eafff0; border:1px solid #c1f1d0; display:flex; align-items:center; justify-content:center; color:var(--green); font-weight:800 }
+    .confirm .txt{ color:#0f172a; font-weight:600 }
+
+    .actions{ display:flex; gap:12px; margin-top:16px; flex-wrap:wrap }
+    .btn{
+      height:46px; padding:0 18px; border-radius:12px; font-weight:700; cursor:pointer; border:1px solid transparent;
+      transition: transform .08s, box-shadow .12s;
+    }
+    .btn:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.10) }
+    .btn-confirm{ background:linear-gradient(180deg,var(--green),var(--green-2)); color:#fff; border-color:var(--green) }
+    .btn-cancel{ background:#fff; color:#0f172a; border-color:var(--border) }
+
+    .paypal-wrap{ margin-top:10px }
+  </style>
+</head>
+
+<div class="container">
+  <p><a class="back" href={`/producto/${product.slug}/`}>← Volver al producto</a></p>
+
+  <div class="card">
+    <div class="grid">
+      {img ? <img class="img" src={img} alt={product.title} /> : <div></div>}
+      <div>
+        <h1 class="title">{product.title}</h1>
+        <div class="price">{money(Number(product.price || 0))}</div>
+
+        <div class="box confirm">
+          <div class="icon">!</div>
+          <div>
+            <div class="txt">¿Estás seguro de querer continuar con la compra?</div>
+            <div class="muted">Serás dirigido a PayPal para finalizar el pago de forma segura.</div>
+          </div>
+        </div>
+
+        <!-- FORMULARIO PayPal ÚNICO PARA ESTE ID -->
+        <div class="paypal-wrap">
+          <form id={`form-${product.id}`} action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+            <input type="hidden" name="cmd" value="_s-xclick" />
+            <input type="hidden" name="hosted_button_id" value="87GJ4X5NBQCNN" />
+            <input type="hidden" name="currency_code" value="MXN" />
+            <!-- Para conciliar en PayPal qué producto fue -->
+            <input type="hidden" name="item_name" value={product.title} />
+            <input type="hidden" name="custom" value={`product_id=${product.id}&slug=${product.slug}`} />
+
+            <div class="actions">
+              <!-- Confirmar envía el form de PayPal -->
+              <button type="submit" class="btn btn-confirm">Confirmar pago</button>
+              <!-- Cancelar regresa al detalle -->
+              <a class="btn btn-cancel" href={`/producto/${product.slug}/`}>Cancelar</a>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>

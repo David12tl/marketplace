@@ -1,5 +1,6 @@
 ---
 import products from '../../data/products.json';
+import NavBar from '../../components/NavBar.astro';
 
 export async function getStaticPaths() {
   return products.map((p) => ({
@@ -36,7 +37,6 @@ const monthly = (Number(product.price) / months) || 0;
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
-
 <style>
   :root{
     --bg:#ffffff; --surface:#f8fafc; --card:#ffffff; --border:#e5e7eb;
@@ -132,7 +132,7 @@ const monthly = (Number(product.price) / months) || 0;
   .qaform{ display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:10px }
   .btn-blue{ background:#1d4ed8; border:1px solid #1d4ed8; color:#fff; height:44px; padding:0 16px; border-radius:10px; font-weight:700; cursor:pointer }
 </style>
-
+<NavBar />
 <div class="container">
   <!-- MIGAS -->
   <nav class="breadcrumbs">
@@ -212,8 +212,12 @@ const monthly = (Number(product.price) / months) || 0;
       )}
 
       <div style="display:flex;gap:12px;margin-top:18px;flex-wrap:wrap">
-        <button id="btn-add" class="btn">Añadir al carrito</button>
-        <a class="btn secondary" href={`/pagos#form-${product.id}`}>Comprar ahora</a>
+        <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+          <input type="hidden" name="cmd" value="_s-xclick" />
+          <input type="hidden" name="hosted_button_id" value="87GJ4X5NBQCNN" />
+          <input type="hidden" name="currency_code" value="MXN" />
+          <input type="image" src="https://www.paypalobjects.com/es_ES/i/btn/btn_buynowCC_LG.gif" border="0" name="submit" title="PayPal es una forma segura y fácil de pagar en línea." alt="Comprar ahora" />
+        </form>
       </div>
 
 
@@ -315,25 +319,27 @@ const monthly = (Number(product.price) / months) || 0;
 
 <!-- ===== Lógica cliente: carrito/checkout + reseñas + Q&A ===== -->
 <script is:inline>
-  // Carrito/Checkout (usa tu lib y endpoint existentes)
+  // Datos del producto serializados
+  const PRODUCT_DATA = {
+    id: ${Number(product.id)},
+    slug: ${JSON.stringify(product.slug)},
+    name: ${JSON.stringify(product.title)},
+    price: ${Number(product.price)},
+    image: ${JSON.stringify((product.gallery?.[0] || product.image) ?? '')},
+    currency: "mxn"
+  };
+
+  // Carrito / Checkout
   import('/src/lib/cart.js').then(({ Cart }) => {
     const btnAdd = document.getElementById('btn-add');
     const btnBuy = document.getElementById('btn-buy');
-    const product = {
-      id:         {product.id},
-      slug:       "{product.slug}",
-      name:       "{product.title}",
-      price:      {Number(product.price)},
-      image:      "{(product.gallery?.[0] || product.image) ?? ''}",
-      currency:   "mxn"
-    };
-    btnAdd?.addEventListener('click', () => { Cart.add(product); window.location.href = '/carrito/'; });
+    btnAdd?.addEventListener('click', () => { Cart.add(PRODUCT_DATA); window.location.href = '/carrito/'; });
     btnBuy?.addEventListener('click', async () => {
       try{
         const res = await fetch('/api/create-checkout', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            items:[{ name:product.name, price:product.price, quantity:1, image:product.image, currency:product.currency }],
+            items:[{ name:PRODUCT_DATA.name, price:PRODUCT_DATA.price, quantity:1, image:PRODUCT_DATA.image, currency:PRODUCT_DATA.currency }],
             success_url: `${window.location.origin}/gracias/`,
             cancel_url: window.location.href
           })
@@ -344,9 +350,9 @@ const monthly = (Number(product.price) / months) || 0;
     });
   });
 
-  // ===== Reseñas con histograma (localStorage demo) =====
+  // Reseñas (localStorage)
   (function(){
-    const KEY = `reviews_{product.slug}`;
+    const KEY = 'reviews_' + ${JSON.stringify(product.slug)};
     const $avg = document.getElementById('avgScore');
     const $stars = document.getElementById('avgStars');
     const $count = document.getElementById('countReviews');
@@ -354,26 +360,22 @@ const monthly = (Number(product.price) / months) || 0;
     const $bars = document.getElementById('bars');
     const $form = document.getElementById('reviewForm');
     const $picker = document.getElementById('starsPicker');
-
     const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
     const write = (arr) => localStorage.setItem(KEY, JSON.stringify(arr));
     const fmtStars = (n) => '★'.repeat(n) + '☆'.repeat(5-n);
-
     function renderBars(dist, total){
       $bars.innerHTML = '';
       for(let s=5; s>=1; s--){
         const pct = total ? Math.round((dist[s]||0) * 100 / total) : 0;
         const row = document.createElement('div');
         row.className = 'barrow';
-        row.innerHTML = `<span>${s}</span><div class="bar"><i style="width:${pct}%"></i></div>`;
+        row.innerHTML = '<span>'+s+'</span><div class="bar"><i style="width:'+pct+'%"></i></div>';
         $bars.appendChild(row);
       }
     }
-
     function render(){
       const items = read();
       const total = items.length;
-
       if (!total) {
         $avg.textContent = '—';
         $stars.textContent = '☆☆☆☆☆';
@@ -382,77 +384,65 @@ const monthly = (Number(product.price) / months) || 0;
         renderBars({}, 0);
         return;
       }
-
       const avg = items.reduce((a,b)=>a+b.rating,0)/total;
       $avg.textContent = avg.toFixed(1);
       $stars.textContent = fmtStars(Math.round(avg));
-      $count.textContent = `${total} calificaciones`;
-
-      // histograma
+      $count.textContent = total + ' calificaciones';
       const dist = {1:0,2:0,3:0,4:0,5:0};
       items.forEach(it => dist[it.rating] = (dist[it.rating]||0)+1);
       renderBars(dist, total);
-
-      // lista (top 3 “destacadas” por calificación, recientes primero)
       const sorted = items.slice().sort((a,b)=> b.rating - a.rating || new Date(b.date) - new Date(a.date)).slice(0,3);
-      $list.innerHTML = sorted.map(it => `
-        <div class="revitem">
-          <div class="revname">${it.name} <span class="revstars">${fmtStars(it.rating)}</span></div>
-          <div class="revdate">${new Date(it.date).toLocaleDateString()}</div>
-          <div style="margin-top:6px">${it.comment.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-        </div>
-      `).join('');
+      $list.innerHTML = sorted.map(it => (
+        '<div class="revitem">'
+        + '<div class="revname">'+it.name+' <span class="revstars">'+fmtStars(it.rating)+'</span></div>'
+        + '<div class="revdate">'+ new Date(it.date).toLocaleDateString() +'</div>'
+        + '<div style="margin-top:6px">'+ String(it.comment).replace(/</g,'&lt;').replace(/>/g,'&gt;') +'</div>'
+        + '</div>'
+      )).join('');
     }
-
-    // picker estrellas
     function setPicker(n){
-      [...$picker.querySelectorAll('.starbtn')].forEach(b => b.classList.toggle('active', Number(b.dataset.v) <= n));
-      (document.getElementById('rating') as HTMLInputElement).value = String(n);
+      Array.from($picker.querySelectorAll('.starbtn')).forEach((b) => b.classList.toggle('active', Number(b.dataset.v) <= n));
+      document.getElementById('rating').value = String(n);
     }
-    $picker.addEventListener('click', e => {
-      const t = e.target as HTMLElement;
+    $picker.addEventListener('click', (e) => {
+      const t = e.target;
       if (t && t.matches('.starbtn')) setPicker(Number(t.getAttribute('data-v')));
     });
     setPicker(5);
-
     $form.addEventListener('submit', (e)=>{
       e.preventDefault();
-      const name = (document.getElementById('name') as HTMLInputElement).value.trim();
-      const comment = (document.getElementById('comment') as HTMLTextAreaElement).value.trim();
-      const rating = Number((document.getElementById('rating') as HTMLInputElement).value) || 5;
+      const name = document.getElementById('name').value.trim();
+      const comment = document.getElementById('comment').value.trim();
+      const rating = Number(document.getElementById('rating').value) || 5;
       if (!name || !comment) return;
       const items = read();
       items.unshift({ name, comment, rating, date: new Date().toISOString() });
       write(items);
-      (e.target as HTMLFormElement).reset();
+      e.target.reset();
       setPicker(5);
       render();
     });
-
     render();
   })();
 
-  // ===== Q&A (localStorage demo) =====
+  // Q&A (localStorage)
   (function(){
-    const KEY = `qa_{product.slug}`;
+    const KEY = 'qa_' + ${JSON.stringify(product.slug)};
     const $list = document.getElementById('qaList');
-    const $txt = document.getElementById('qText') as HTMLInputElement;
+    const $txt = document.getElementById('qText');
     const $btn = document.getElementById('qAsk');
-
     const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
     const write = (arr) => localStorage.setItem(KEY, JSON.stringify(arr));
-
     function render(){
       const rows = read();
       if (!rows.length) { $list.innerHTML = '<div class="qaitem"><span class="meta">No hay preguntas aún.</span></div>'; return; }
-      $list.innerHTML = rows.map(r => `
-        <div class="qaitem">
-          <div class="q">— ${r.q}</div>
-          ${r.a ? `<div class="a">${r.a}</div>` : `<div class="meta" style="margin-top:6px">El vendedor aún no responde.</div>`}
-        </div>
-      `).join('');
+      $list.innerHTML = rows.map(r => (
+        '<div class="qaitem">'
+        + '<div class="q">— '+ r.q +'</div>'
+        + (r.a ? '<div class="a">'+ r.a +'</div>' : '<div class="meta" style="margin-top:6px">El vendedor aún no responde.</div>')
+        + '</div>'
+      )).join('');
     }
-
     $btn.addEventListener('click', ()=>{
       const q = ($txt.value || '').trim();
       if (!q) return;
@@ -462,7 +452,6 @@ const monthly = (Number(product.price) / months) || 0;
       $txt.value = '';
       render();
     });
-
     render();
   })();
 </script>
